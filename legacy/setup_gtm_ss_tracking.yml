@@ -1,0 +1,225 @@
+- name: Setup Google Tag Manager Server-Side Tracking
+  hosts: vps
+  become: yes
+
+- name: Fix hosts with no python at all
+  hosts: vps
+  become: yes
+  gather_facts: false
+  tasks:
+    - name: Perform a dirty OS detection if python is not installed
+      raw: |-
+        if which python > /dev/null || which python3 > /dev/null; then
+          echo installed
+        else
+          sed -n "s/^NAME=\"\(.*\)\"/\\1/p" /etc/os-release
+        fi
+      changed_when: false
+      register: dirty_detect
+
+    - name: Print message when already installed
+      debug:
+        msg: Host {{ inventory_hostname }} already has python. Next will skip.
+      when: dirty_detect.stdout_lines[0] == 'installed'
+
+    - name: Install python on openbsd if needed
+      raw: |-
+        pkg_add -r python%3
+      become: true
+      when: dirty_detect.stdout_lines[0] == 'OpenBSD'
+
+    - name: Install python on Ubuntu if needed
+      raw: |-
+        apt install -y python3
+      become: true
+      when: dirty_detect.stdout_lines[0] == 'Ubuntu'
+
+- name: Gather facts and continue with setup
+  hosts: vps
+  become: yes
+  gather_facts: true
+  tasks:
+    - name: Ensure ports 80 and 443 are free
+      become: yes
+      command: fuser -k 80/tcp 443/tcp
+      ignore_errors: yes
+
+    - name: Update and upgrade apt packages
+      apt:
+        update_cache: yes
+        upgrade: dist
+
+    - name: Install necessary packages
+      apt:
+        name:
+          - nginx
+          - certbot
+          - docker.io
+        state: present
+
+    - name: Stop Nginx service
+      service:
+        name: nginx
+        state: stopped
+
+    - name: Remove default Nginx site configuration
+      file:
+        path: /etc/nginx/sites-enabled/default
+        state: absent
+        force: yes
+      ignore_errors: yes
+
+    - name: Obtain SSL/TLS certificates with Certbot for {{ domain1 }}
+      command: >
+        timeout 300 certbot certonly --standalone -d {{ domain1 }} --agree-tos --register-unsafely-without-email
+      register: certbot_output1
+      failed_when: certbot_output1.rc != 0
+      retries: 3
+      delay: 30
+      until: certbot_output1.rc == 0
+
+    - name: Obtain SSL/TLS certificates with Certbot for {{ domain2 }}
+      command: >
+        timeout 300 certbot certonly --standalone -d {{ domain2 }} --agree-tos --register-unsafely-without-email
+      register: certbot_output2
+      failed_when: certbot_output2.rc != 0
+      retries: 3
+      delay: 30
+      until: certbot_output2.rc == 0
+
+    - name: Check if certificates for {{ domain1 }} exist
+      stat:
+        path: "/etc/letsencrypt/live/{{ domain1 }}/fullchain.pem"
+      register: cert1
+
+    - name: Check if certificates for {{ domain2 }} exist
+      stat:
+        path: "/etc/letsencrypt/live/{{ domain2 }}/fullchain.pem"
+      register: cert2
+
+    - name: Fail if certificates for {{ domain1 }} do not exist
+      fail:
+        msg: "Certificates for {{ domain1 }} do not exist"
+      when: not cert1.stat.exists
+
+    - name: Fail if certificates for {{ domain2 }} do not exist
+      fail:
+        msg: "Certificates for {{ domain2 }} do not exist"
+      when: not cert2.stat.exists
+
+    - name: Create Nginx configuration for HTTP to HTTPS redirect
+      copy:
+        dest: /etc/nginx/sites-available/redirect_http2https
+        content: |
+          server {
+              listen 80 default_server;
+              listen [::]:80 default_server;
+              server_name _;
+              return 301 https://$host$request_uri;
+          }
+
+    - name: Create Nginx configuration for {{ domain1 }}
+      copy:
+        dest: /etc/nginx/sites-available/{{ domain1 }}
+        content: |
+          server {
+              listen 443 ssl http2;
+              listen [::]:443 ssl http2;
+              server_name {{ domain1 }};
+              gzip on;
+              gzip_disable "msie6";
+              gzip_min_length 100;
+          
+              location ^~ /.well-known/acme-challenge/ {
+                  allow all;
+                  root /var/lib/letsencrypt/;
+                  default_type "text/plain";
+                  try_files $uri =404;
+              }
+          
+              location / {
+                 proxy_pass http://localhost:8080;
+              }
+          
+              ssl_certificate /etc/letsencrypt/live/{{ domain1 }}/fullchain.pem;
+              ssl_certificate_key /etc/letsencrypt/live/{{ domain1 }}/privkey.pem;
+          }
+
+    - name: Create Nginx configuration for {{ domain2 }}
+      copy:
+        dest: /etc/nginx/sites-available/{{ domain2 }}
+        content: |
+          server {
+              listen 443 ssl http2;
+              listen [::]:443 ssl http2;
+              server_name {{ domain2 }};
+              gzip on;
+              gzip_disable "msie6";
+              gzip_min_length 100;
+          
+              location ^~ /.well-known/acme-challenge/ {
+                  allow all;
+                  root /var/lib/letsencrypt/;
+                  default_type "text/plain";
+                  try_files $uri =404;
+              }
+          
+              location / {
+                 proxy_pass http://localhost:8079;
+              }
+          
+              ssl_certificate /etc/letsencrypt/live/{{ domain2 }}/fullchain.pem;
+              ssl_certificate_key /etc/letsencrypt/live/{{ domain2 }}/privkey.pem;
+          }
+
+    - name: Enable Nginx configuration files
+      file:
+        src: "/etc/nginx/sites-available/{{ item }}"
+        dest: "/etc/nginx/sites-enabled/{{ item }}"
+        state: link
+      loop:
+        - redirect_http2https
+        - "{{ domain1 }}"
+        - "{{ domain2 }}"
+
+    - name: Test Nginx configuration
+      command: nginx -t
+      register: nginx_test_output
+      failed_when: nginx_test_output.rc != 0
+
+    - name: Start Nginx service
+      service:
+        name: nginx
+        state: started
+
+    - name: Ensure pip3 is installed
+      apt:
+        name: python3-pip
+        state: present
+
+    - name: Install Docker Python module
+      pip:
+        name: docker
+        state: present
+
+    - name: Run Docker container for GTM preview
+      docker_container:
+        name: gtm-preview
+        image: gcr.io/cloud-tagging-10302018/gtm-cloud-image:stable
+        state: started
+        ports:
+          - "8079:8080"
+        env:
+          CONTAINER_CONFIG: '{{ gtm_config_token }}'
+          RUN_AS_PREVIEW_SERVER: "true"
+
+    - name: Run Docker container for GTM live
+      docker_container:
+        name: gtm-live
+        image: gcr.io/cloud-tagging-10302018/gtm-cloud-image:stable
+        state: started
+        ports:
+          - "8080:8080"
+        env:
+          CONTAINER_CONFIG: '{{ gtm_config_token }}'
+          PREVIEW_SERVER_URL: 'https://{{ domain2 }}'

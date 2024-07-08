@@ -1,0 +1,38 @@
+---
+- name: Obtain SSL/TLS certificates with Certbot for {{ domain1 }}
+  command: >
+    timeout 300 certbot certonly --standalone -d {{ domain1 }} --agree-tos --register-unsafely-without-email
+  register: certbot_output1
+  failed_when: certbot_output1.rc != 0
+  retries: 3
+  delay: 30
+  until: certbot_output1.rc == 0
+
+- name: Obtain SSL/TLS certificates with Certbot for {{ domain2 }}
+  command: >
+    timeout 300 certbot certonly --standalone -d {{ domain2 }} --agree-tos --register-unsafely-without-email
+  register: certbot_output2
+  failed_when: certbot_output2.rc != 0
+  retries: 3
+  delay: 30
+  until: certbot_output2.rc == 0
+
+- name: Check if certificates for {{ domain1 }} exist
+  stat:
+    path: "/etc/letsencrypt/live/{{ domain1 }}/fullchain.pem"
+  register: cert1
+
+- name: Check if certificates for {{ domain2 }} exist
+  stat:
+    path: "/etc/letsencrypt/live/{{ domain2 }}/fullchain.pem"
+  register: cert2
+
+- name: Fail if certificates for {{ domain1 }} do not exist
+  fail:
+    msg: "Certificates for {{ domain1 }} do not exist"
+  when: not cert1.stat.exists
+
+- name: Fail if certificates for {{ domain2 }} do not exist
+  fail:
+    msg: "Certificates for {{ domain2 }} do not exist"
+  when: not cert2.stat.exists

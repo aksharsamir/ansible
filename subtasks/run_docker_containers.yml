@@ -1,0 +1,22 @@
+---
+- name: Run Docker container for GTM preview
+  docker_container:
+    name: gtm-preview
+    image: gcr.io/cloud-tagging-10302018/gtm-cloud-image:stable
+    state: started
+    ports:
+      - "8079:8080"
+    env:
+      CONTAINER_CONFIG: '{{ gtm_config_token }}'
+      RUN_AS_PREVIEW_SERVER: "true"
+
+- name: Run Docker container for GTM live
+  docker_container:
+    name: gtm-live
+    image: gcr.io/cloud-tagging-10302018/gtm-cloud-image:stable
+    state: started
+    ports:
+      - "8080:8080"
+    env:
+      CONTAINER_CONFIG: '{{ gtm_config_token }}'
+      PREVIEW_SERVER_URL: 'https://{{ domain2 }}'

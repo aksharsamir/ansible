@@ -1,0 +1,8 @@
+---
+- name: Install necessary packages
+  apt:
+    name:
+      - nginx
+      - certbot
+      - docker.io
+    state: present

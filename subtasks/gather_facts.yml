@@ -1,0 +1,5 @@
+---
+- name: Ensure ports 80 and 443 are free
+  become: yes
+  command: fuser -k 80/tcp 443/tcp
+  ignore_errors: yes

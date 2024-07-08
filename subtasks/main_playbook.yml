@@ -1,0 +1,17 @@
+
+- name: Setup Google Tag Manager Server-Side Tracking
+  hosts: vps
+  become: yes
+  tasks:
+    - import_tasks: fix_hosts_without_python.yml
+    - import_tasks: gather_facts.yml
+    - import_tasks: update_upgrade.yml
+    - import_tasks: install_packages.yml
+    - import_tasks: stop_nginx.yml
+    - import_tasks: remove_default_nginx.yml
+    - import_tasks: obtain_certificates.yml
+    - import_tasks: create_nginx_config.yml
+    - import_tasks: enable_nginx_config.yml
+    - import_tasks: test_start_nginx.yml
+    - import_tasks: install_docker_py.yml
+    - import_tasks: run_docker_containers.yml

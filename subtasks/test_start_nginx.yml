@@ -1,0 +1,10 @@
+---
+- name: Test Nginx configuration
+  command: nginx -t
+  register: nginx_test_output
+  failed_when: nginx_test_output.rc != 0
+
+- name: Start Nginx service
+  service:
+    name: nginx
+    state: started

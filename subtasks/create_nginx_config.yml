@@ -1,0 +1,65 @@
+---
+- name: Create Nginx configuration for HTTP to HTTPS redirect
+  copy:
+    dest: /etc/nginx/sites-available/redirect_http2https
+    content: |
+      server {
+          listen 80 default_server;
+          listen [::]:80 default_server;
+          server_name _;
+          return 301 https://$host$request_uri;
+      }
+
+- name: Create Nginx configuration for {{ domain1 }}
+  copy:
+    dest: /etc/nginx/sites-available/{{ domain1 }}
+    content: |
+      server {
+          listen 443 ssl http2;
+          listen [::]:443 ssl http2;
+          server_name {{ domain1 }};
+          gzip on;
+          gzip_disable "msie6";
+          gzip_min_length 100;
+      
+          location ^~ /.well-known/acme-challenge/ {
+              allow all;
+              root /var/lib/letsencrypt/;
+              default_type "text/plain";
+              try_files $uri =404;
+          }
+      
+          location / {
+             proxy_pass http://localhost:8080;
+          }
+      
+          ssl_certificate /etc/letsencrypt/live/{{ domain1 }}/fullchain.pem;
+          ssl_certificate_key /etc/letsencrypt/live/{{ domain1 }}/privkey.pem;
+      }
+
+- name: Create Nginx configuration for {{ domain2 }}
+  copy:
+    dest: /etc/nginx/sites-available/{{ domain2 }}
+    content: |
+      server {
+          listen 443 ssl http2;
+          listen [::]:443 ssl http2;
+          server_name {{ domain2 }};
+          gzip on;
+          gzip_disable "msie6";
+          gzip_min_length 100;
+      
+          location ^~ /.well-known/acme-challenge/ {
+              allow all;
+              root /var/lib/letsencrypt/;
+              default_type "text/plain";
+              try_files $uri =404;
+          }
+      
+          location / {
+             proxy_pass http://localhost:8079;
+          }
+      
+          ssl_certificate /etc/letsencrypt/live/{{ domain2 }}/fullchain.pem;
+          ssl_certificate_key /etc/letsencrypt/live/{{ domain2 }}/privkey.pem;
+      }

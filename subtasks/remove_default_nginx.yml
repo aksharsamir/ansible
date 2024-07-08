@@ -1,0 +1,7 @@
+---
+- name: Remove default Nginx site configuration
+  file:
+    path: /etc/nginx/sites-enabled/default
+    state: absent
+    force: yes
+  ignore_errors: yes

@@ -1,0 +1,10 @@
+---
+- name: Enable Nginx configuration files
+  file:
+    src: "/etc/nginx/sites-available/{{ item }}"
+    dest: "/etc/nginx/sites-enabled/{{ item }}"
+    state: link
+  loop:
+    - redirect_http2https
+    - "{{ domain1 }}"
+    - "{{ domain2 }}"
