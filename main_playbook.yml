@@ -1,5 +1,6 @@
 - name: Setup Google Tag Manager Server-Side Tracking
-  hosts: vps
+  hosts: localhost
+  connection: local
   become: yes
   tasks:
     - import_tasks: subtasks/fix_hosts_without_python.yml
