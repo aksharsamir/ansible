@@ -9,9 +9,9 @@
     - import_tasks: subtasks/install_packages.yml
     - import_tasks: subtasks/stop_nginx.yml
     - import_tasks: subtasks/remove_default_nginx.yml
-    - import_tasks: subtasks/obtain_certificates.yml
     - import_tasks: subtasks/create_nginx_config.yml
     - import_tasks: subtasks/enable_nginx_config.yml
-    - import_tasks: subtasks/test_start_nginx.yml
     - import_tasks: subtasks/install_docker_py.yml
     - import_tasks: subtasks/run_docker_containers.yml
+    # - import_tasks: subtasks/obtain_certificates.yml
+    # - import_tasks: subtasks/test_start_nginx.yml
